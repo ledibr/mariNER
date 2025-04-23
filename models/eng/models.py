@@ -110,6 +110,8 @@ class NERModel:
             compute_metrics=self.compute_metrics,
         )
 
+        self.da.train()
+
     def eval(self) -> None:
         print("--------Lowercase Evaluation--------")
         print(f"Baseline F1: {self.baseline.evaluate(eval_dataset=self.lower_test)['eval_f1'] * 100:0.2f}")
@@ -118,10 +120,57 @@ class NERModel:
         print(f"Baseline F1: {self.baseline.evaluate(eval_dataset=self.upper_test)['eval_f1'] * 100:0.2f}")
         print(f"DA F1: {self.da.evaluate(eval_dataset=self.upper_test)['eval_f1'] * 100:0.2f}")
 
+    def compute_objective(self, metrics: dict[str, float]) -> float:
+        """
+        The default objective to maximize/minimize when doing an hyperparameter search. It is the evaluation loss if no
+        metrics are provided to the :class:`~transformers.Trainer`, the sum of all metrics otherwise.
+
+        Args:
+            metrics (:obj:`Dict[str, float]`): The metrics returned by the evaluate method.
+
+        Return:
+            :obj:`float`: The objective to minimize or maximize
+        """
+        f1 = metrics.pop("eval_f1", None)
+        _ = metrics.pop("epoch", None)
+        return f1 if len(metrics) == 0 else sum(metrics.values())
+
+    def finetune(self):
+        self.baseline = Trainer(
+            model_init=self.model_init,
+            args=self.training_args,
+            train_dataset=self.conll["train"],
+            eval_dataset=self.conll["test"],
+            processing_class=self.tokenizer,
+            data_collator=self.data_collator,
+            compute_metrics=self.compute_metrics,
+        )
+
+        return self.baseline.hyperparameter_search(
+            direction='maximize',
+            compute_objective=self.compute_objective,
+            n_trials=10
+        )
+
 if __name__ == '__main__':
+    print(80 * '=')
+    print('BERT-base-cased')
+    print(80 * '=')
     bert_ner = NERModel('bert-base-cased')
     bert_ner.tokenize_and_align_all_data()
-    bert_ner.baseline_train()
-    bert_ner.da_train()
-    bert_ner.eval()
+    # bert_ner.baseline_train()
+    # bert_ner.da_train()
+    # bert_ner.eval()
+    print(bert_ner.finetune())
+
+    # print(80 * '=')
+    # print('XLM-R Base')
+    # print(80 * '=')
+    # xlmr_ner = NERModel('xlm-roberta-base')
+    # xlmr_ner.tokenize_and_align_all_data()
+    # xlmr_ner.baseline_train()
+    # xlmr_ner.da_train()
+    # xlmr_ner.eval()
+
+    print('Done!')
 
