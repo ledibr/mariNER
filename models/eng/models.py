@@ -1,7 +1,10 @@
+import copy
+
 from load_data import conll, da_train, lower_test, upper_test, label_list, id2label, label2id
 from transformers import (AutoTokenizer, DataCollatorForTokenClassification, AutoModelForTokenClassification,
                           TrainingArguments, Trainer)
 import typing
+from optuna import Trial
 import evaluate
 import numpy as np
 from abc import ABC
@@ -22,6 +25,7 @@ class NERModel(ABC):
         self.da = da
         self.training_args = TrainingArguments(
             output_dir="test_ner_model",
+            overwrite_output_dir=True,
             learning_rate=lr,
             per_device_train_batch_size=train_batch_size,
             per_device_eval_batch_size=16,
@@ -119,12 +123,12 @@ class NERModel(ABC):
     def eval(self) -> None:
         print(f"Original Dataset F1: {self.model.evaluate(eval_dataset=self.conll['test'])['eval_f1'] * 100:0.2f}")
         print(f"Lowercase Dataset F1: {self.model.evaluate(eval_dataset=self.lower_test)['eval_f1'] * 100:0.2f}")
-        print(f"Uppercase F1: {self.model.evaluate(eval_dataset=self.upper_test)['eval_f1'] * 100:0.2f}")
+        print(f"Uppercase Dataset F1: {self.model.evaluate(eval_dataset=self.upper_test)['eval_f1'] * 100:0.2f}")
 
     @staticmethod
     def compute_objective(metrics: dict[str, float]) -> float:
         """
-        The default objective to maximize/minimize when doing an hyperparameter search. It is the evaluation loss if no
+        The default objective to maximize/minimize when doing a hyperparameter search. It is the evaluation loss if no
         metrics are provided to the :class:`~transformers.Trainer`, the sum of all metrics otherwise.
 
         Args:
@@ -133,9 +137,19 @@ class NERModel(ABC):
         Return:
             :obj:`float`: The objective to minimize or maximize
         """
+        metrics = copy.deepcopy(metrics)
         f1 = metrics.pop("eval_f1", None)
-        _ = metrics.pop("epoch", None)
-        return f1 if len(metrics) == 0 else sum(metrics.values())
+        return f1 if f1 else sum(metrics.values())
+
+
+    @staticmethod
+    def optuna_hp_space(trial: Trial) -> dict[str, float]:
+        return {
+            "learning_rate": trial.suggest_float("learning_rate", 1e-6, 1e-4, log=True),
+            "num_train_epochs": trial.suggest_int("num_train_epochs", 1, 6),
+            "seed": trial.suggest_int("seed", 1, 40),
+            "per_device_train_batch_size": trial.suggest_categorical("per_device_train_batch_size", [4, 8, 16, 32, 64]),
+        }
 
     def finetune(self):
         if self.da:
@@ -152,6 +166,7 @@ class NERModel(ABC):
             return trainer.hyperparameter_search(
                 direction='maximize',
                 compute_objective=self.compute_objective,
+                hp_space=self.optuna_hp_space,
                 n_trials=10
             )
         else:
@@ -168,6 +183,7 @@ class NERModel(ABC):
             return trainer.hyperparameter_search(
                 direction='maximize',
                 compute_objective=self.compute_objective,
+                hp_space=self.optuna_hp_space,
                 n_trials=10
             )
 
@@ -175,11 +191,11 @@ if __name__ == '__main__':
     print(80 * '=')
     print('BERT-base-cased Baseline')
     print(80 * '=')
-    baseline_bert_ner = NERModel('bert-base-cased', 8.89326919195178e-05,
-                                 64, 5, 40)
+    baseline_bert_ner = NERModel('bert-base-cased')
     baseline_bert_ner.tokenize_and_align_all_data()
     baseline_bert_ner.train()
     baseline_bert_ner.eval()
+    # print(baseline_bert_ner.finetune())
 
     print(80 * '=')
     print('BERT-base-cased Data Augmented')
