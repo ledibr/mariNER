@@ -58,7 +58,7 @@ def load_conll_file(path: str, delimiter: str = " ") -> list[Document]:
     return sentence_list
 
 
-def get_pandas_df(path: str) -> pd.DataFrame:
+def get_pandas_df(path: str, test:Bool) -> pd.DataFrame:
     """given a filepath, returns a pandas dataframe with unaltered, lowercased, and uppercased data"""
     #call our function to process the data
     pre_pd = load_conll_file(path)
@@ -80,6 +80,9 @@ def get_pandas_df(path: str) -> pd.DataFrame:
     upper_df = pd.DataFrame(zip(upper_tokens, document_labels), columns=["Tokens", "Labels"])
     #now we can concatenate into one dataframe
     #figuring out how to concatenate pandas dfs is always trial and error so you're just gonna have to trust me that this does what we want
-    full_df = pd.concat([df, lower_df, upper_df], ignore_index=True)
-    return full_df
+    if test == False:
+        full_df = pd.concat([df, lower_df, upper_df], ignore_index=True)
+        return full_df
+    else:
+        return df, lower_df, upper_df
 
