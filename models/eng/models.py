@@ -167,7 +167,8 @@ class NERModel(ABC):
                     load_best_model_at_end=True,
                     push_to_hub=False,
                     report_to='none',
-                    seed=seed
+                    seed=42,
+                    logging_strategy='epoch'
                 )
 
                 if self.da:
