@@ -10,5 +10,5 @@ vate conda or load modules if needed
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate cosi232
 
-cd $HOME/nerproject  # adjust location as needed
+cd $HOME/models/multilingual  # adjust location as needed
 python3 finnish.py  # adjust name as needed

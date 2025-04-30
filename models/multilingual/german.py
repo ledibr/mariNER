@@ -5,12 +5,12 @@ import numpy as np
 import evaluate
 
 #load train file
-ger_aug_train = get_aug_pandas_df("./data/ger/train.txt", test=False)
-ger_reg_train = get_reg_pandas_df("./data/ger/train.txt")
+ger_aug_train = get_aug_pandas_df("./data/deu/train.txt", test=False)
+ger_reg_train = get_reg_pandas_df("./data/deu/train.txt")
 #load dev file: we don't augment here
-ger_dev = get_reg_pandas_df("./data/ger/dev.txt")
+ger_dev = get_reg_pandas_df("./data/deu/dev.txt")
 #load test file: we want regular, upper, and lower
-ger_test_reg, ger_test_lower, ger_test_upper = get_aug_pandas_df("./data/ger/test.txt", test=True)
+ger_test_reg, ger_test_lower, ger_test_upper = get_aug_pandas_df("./data/deu/test.txt", test=True)
 
 #now we can create the dataset object
 ger_aug_dataset = DatasetDict()
