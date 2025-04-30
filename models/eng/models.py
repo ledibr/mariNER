@@ -152,40 +152,63 @@ class NERModel(ABC):
         }
 
     def finetune(self):
-        if self.da:
-            trainer = Trainer(
-                model_init=self.model_init,
-                args=self.training_args,
-                train_dataset=self.da_train_data,
-                eval_dataset=self.conll["validation"],
-                processing_class=self.tokenizer,
-                data_collator=self.data_collator,
-                compute_metrics=self.compute_metrics,
-            )
+        for lr in [1e-6, 1e-5, 1e-4]:
+            for batch_size in [8, 16, 32]:
+                training_args = TrainingArguments(
+                    output_dir="test_ner_model",
+                    overwrite_output_dir=True,
+                    learning_rate=lr,
+                    per_device_train_batch_size=batch_size,
+                    per_device_eval_batch_size=16,
+                    num_train_epochs=5,
+                    weight_decay=0.01,
+                    eval_strategy="epoch",
+                    save_strategy="epoch",
+                    load_best_model_at_end=True,
+                    push_to_hub=False,
+                    report_to='none',
+                    seed=seed
+                )
 
-            return trainer.hyperparameter_search(
-                direction='maximize',
-                compute_objective=self.compute_objective,
-                hp_space=self.optuna_hp_space,
-                n_trials=10
-            )
-        else:
-            trainer = Trainer(
-                model_init=self.model_init,
-                args=self.training_args,
-                train_dataset=self.conll["train"],
-                eval_dataset=self.conll["validation"],
-                processing_class=self.tokenizer,
-                data_collator=self.data_collator,
-                compute_metrics=self.compute_metrics,
-            )
+                if self.da:
+                    trainer = Trainer(
+                        model_init=self.model_init,
+                        args=training_args,
+                        train_dataset=self.da_train_data,
+                        eval_dataset=self.conll["validation"],
+                        processing_class=self.tokenizer,
+                        data_collator=self.data_collator,
+                        compute_metrics=self.compute_metrics,
+                    )
 
-            return trainer.hyperparameter_search(
-                direction='maximize',
-                compute_objective=self.compute_objective,
-                hp_space=self.optuna_hp_space,
-                n_trials=10
-            )
+                    trainer.train()
+                    #
+                    # return trainer.hyperparameter_search(
+                    #     direction='maximize',
+                    #     compute_objective=self.compute_objective,
+                    #     hp_space=self.optuna_hp_space,
+                    #     n_trials=10
+                    # )
+
+                else:
+                    trainer = Trainer(
+                        model_init=self.model_init,
+                        args=self.training_args,
+                        train_dataset=self.conll["train"],
+                        eval_dataset=self.conll["validation"],
+                        processing_class=self.tokenizer,
+                        data_collator=self.data_collator,
+                        compute_metrics=self.compute_metrics,
+                    )
+
+                    trainer.train()
+
+                    # return trainer.hyperparameter_search(
+                    #     direction='maximize',
+                    #     compute_objective=self.compute_objective,
+                    #     hp_space=self.optuna_hp_space,
+                    #     n_trials=10
+                    # )
 
 if __name__ == '__main__':
     print(80 * '=')
