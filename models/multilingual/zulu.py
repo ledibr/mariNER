@@ -1,0 +1,137 @@
+from preprocessing_utils import get_reg_pandas_df, get_aug_pandas_df
+from datasets import Dataset, DatasetDict
+from transformers import AutoTokenizer, AutoModelForTokenClassification, TrainingArguments, DataCollatorForTokenClassification, Trainer
+import numpy as np
+import torch
+import evaluate
+
+#load train file
+zul_aug_train = get_aug_pandas_df("./data/zul/train.txt", test=False)
+zul_reg_train = get_reg_pandas_df("./data/zul/train.txt")
+#load dev file: we don't augment here
+zul_dev = get_reg_pandas_df("./data/zul/dev.txt")
+#load test file: we want regular, upper, and lower
+zul_test_reg, zul_test_lower, zul_test_upper = get_aug_pandas_df("./data/zul/test.txt", test=True)
+
+#now we can create the dataset object
+zul_reg_dataset = DatasetDict()
+zul_aug_dataset = DatasetDict()
+zul_test_dataset = DatasetDict()
+#we manually set train, dev, and test
+zul_reg_dataset["train"] = Dataset.from_pandas(zul_reg_train)
+zul_aug_dataset["train"] = Dataset.from_pandas(zul_aug_train)
+zul_reg_dataset["dev"] = Dataset.from_pandas(zul_dev)
+zul_aug_dataset["dev"] = Dataset.from_pandas(zul_dev)
+zul_test_dataset["reg"] = Dataset.from_pandas(zul_test_reg)
+zul_test_dataset["lower"] = Dataset.from_pandas(zul_test_lower)
+zul_test_dataset["upper"] = Dataset.from_pandas(zul_test_upper)
+
+#the next step is tokenization!
+tokenizer = AutoTokenizer.from_pretrained("xlm-roberta-base")
+label_list = ["O", "B-PER", "I-PER", "O-PER", "B-ORG", "I-ORG", "O-ORG", "B-LOC", "I-LOC", "O-LOC"]
+label2id = {label : index for index, label in enumerate(label_list)}
+
+
+def tokenize_and_align_labels(examples):
+    tokenized_inputs = tokenizer(examples["text"], padding= "max_length", truncation=True)
+    labels = []
+    for i, label in enumerate(examples["labels"]):
+        word_ids = tokenized_inputs.word_ids(batch_index=i)
+        previous_word_idx = None
+        label_ids = []
+        for word_idx in word_ids:
+            if word_idx is None:
+                label_ids.append(int(-100))
+            elif word_idx != previous_word_idx:
+                if word_idx < len(label):
+                    label_ids.append(int(label2id[label[word_idx]]))
+                else:
+                    label_ids.append(int(-100))
+            else:
+                label_ids.append(int(-100))
+            previous_word_idx = word_idx
+        labels.append(label_ids)
+    tokenized_inputs["labels"] = labels
+    return tokenized_inputs
+
+zul_tokenized_reg_dataset = zul_reg_dataset.map(tokenize_and_align_labels, batched=True)
+zul_tokenized_aug_dataset = zul_aug_dataset.map(tokenize_and_align_labels, batched=True)
+zul_tokenized_test_dataset = zul_test_dataset.map(tokenize_and_align_labels, batched=True)
+
+#now we initialize the model
+reg_model = AutoModelForTokenClassification.from_pretrained("xlm-roberta-base", num_labels=len(label_list))
+aug_model = AutoModelForTokenClassification.from_pretrained("xlm-roberta-base", num_labels=len(label_list))
+
+#setting up gpu stuff
+reg_model.to("cuda")
+aug_model.to("cuda")
+
+#also training_args
+reg_training_args = TrainingArguments(
+    output_dir="reg_zul",
+    learning_rate=2e-5,
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=16,
+    num_train_epochs=2,
+    weight_decay=0.01,
+    eval_strategy="epoch",
+    save_strategy="epoch",
+    load_best_model_at_end=True,
+    push_to_hub=False,
+    report_to = 'none',
+)
+
+aug_training_args = TrainingArguments(
+    output_dir="aug_zul",
+    learning_rate=2e-5,
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=16,
+    num_train_epochs=2,
+    weight_decay=0.01,
+    eval_strategy="epoch",
+    save_strategy="epoch",
+    load_best_model_at_end=True,
+    push_to_hub=False,
+    report_to = 'none',
+)
+
+#set up compute metrics
+def compute_metrics(p) -> dict[str, float]:
+    seqeval = evaluate.load("seqeval")
+    predictions, labels = p
+    predictions = np.argmax(predictions, axis=2)
+
+    true_predictions = [
+        [label_list[p] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+    true_labels = [
+        [label_list[l] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+
+    results = seqeval.compute(predictions=true_predictions, references=true_labels)
+    return {
+        "precision": results["overall_precision"],
+        "recall": results["overall_recall"],
+        "f1": results["overall_f1"],
+        "accuracy": results["overall_accuracy"],
+    }
+
+#making a data collator to convert to long
+data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
+
+#now we train
+reg_trainer = Trainer(reg_model, args = reg_training_args, train_dataset=zul_tokenized_reg_dataset["train"],
+                      eval_dataset=zul_tokenized_reg_dataset["dev"], data_collator=data_collator, compute_metrics=compute_metrics)
+reg_trainer.train()
+print(f"Baseline F1 on Reg: {reg_trainer.evaluate(eval_dataset=zul_tokenized_test_dataset['reg'])['eval_f1'] * 100:0.2f}")
+print(f"Baseline F1 on Upper: {reg_trainer.evaluate(eval_dataset=zul_tokenized_test_dataset['upper'])['eval_f1'] * 100:0.2f}")
+print(f"Baseline F1 on Lower: {reg_trainer.evaluate(eval_dataset=zul_tokenized_test_dataset['lower'])['eval_f1'] * 100:0.2f}")
+
+aug_trainer = Trainer(aug_model, args= aug_training_args, train_dataset=zul_tokenized_aug_dataset["train"],
+                      eval_dataset=zul_tokenized_aug_dataset["dev"], data_collator=data_collator, compute_metrics=compute_metrics)
+aug_trainer.train()
+print(f"Augmented F1 on Reg: {aug_trainer.evaluate(eval_dataset=zul_tokenized_test_dataset['reg'])['eval_f1'] * 100:0.2f}")
+print(f"Augmented F1 on Upper: {aug_trainer.evaluate(eval_dataset=zul_tokenized_test_dataset['upper'])['eval_f1'] * 100:0.2f}")
+print(f"Augmented F1 on Lower: {aug_trainer.evaluate(eval_dataset=zul_tokenized_test_dataset['lower'])['eval_f1'] * 100:0.2f}")
