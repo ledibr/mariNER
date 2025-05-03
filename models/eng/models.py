@@ -194,7 +194,7 @@ class NERModel(ABC):
                 else:
                     trainer = Trainer(
                         model_init=self.model_init,
-                        args=self.training_args,
+                        args=training_args,
                         train_dataset=self.conll["train"],
                         eval_dataset=self.conll["validation"],
                         processing_class=self.tokenizer,
@@ -215,7 +215,8 @@ if __name__ == '__main__':
     print(80 * '=')
     print('BERT-base-cased Baseline')
     print(80 * '=')
-    baseline_bert_ner = NERModel('bert-base-cased')
+    baseline_bert_ner = NERModel('bert-base-cased', lr=1e-5,
+                                 train_batch_size=8, num_epochs=5)
     baseline_bert_ner.tokenize_and_align_all_data()
     baseline_bert_ner.train()
     baseline_bert_ner.eval()
@@ -224,7 +225,8 @@ if __name__ == '__main__':
     print(80 * '=')
     print('BERT-base-cased Data Augmented')
     print(80 * '=')
-    da_bert_ner = NERModel('bert-base-cased', da=True)
+    da_bert_ner = NERModel('bert-base-cased', da=True,
+                           lr=1e-5, train_batch_size=8, num_epochs=5)
     da_bert_ner.tokenize_and_align_all_data()
     da_bert_ner.train()
     da_bert_ner.eval()
@@ -233,7 +235,8 @@ if __name__ == '__main__':
     print(80 * '=')
     print('XLM-R Baseline')
     print(80 * '=')
-    baseline_xlmr_ner = NERModel('xlm-roberta-base')
+    baseline_xlmr_ner = NERModel('xlm-roberta-base', lr=1e-5,
+                                 train_batch_size=8, num_epochs=3)
     baseline_xlmr_ner.tokenize_and_align_all_data()
     baseline_xlmr_ner.train()
     baseline_xlmr_ner.eval()
@@ -241,7 +244,8 @@ if __name__ == '__main__':
     print(80 * '=')
     print('XLM-R Data Augmented')
     print(80 * '=')
-    da_xlmr_ner = NERModel('xlm-roberta-base', da=True)
+    da_xlmr_ner = NERModel('xlm-roberta-base', da=True,
+                           lr=1e-5, train_batch_size=8, num_epochs=3)
     da_xlmr_ner.tokenize_and_align_all_data()
     da_xlmr_ner.train()
     da_xlmr_ner.eval()
