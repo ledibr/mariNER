@@ -1,5 +1,10 @@
 from typing import Any
 import pandas as pd
+import evaluate
+import numpy as np
+
+
+label_list = ["O", "B-PER", "I-PER", "O-PER", "B-ORG", "I-ORG", "O-ORG", "B-LOC", "I-LOC", "O-LOC"]
 
 
 class Document:
@@ -94,3 +99,25 @@ def get_aug_pandas_df(path: str, test: bool) -> pd.DataFrame|tuple[pd.DataFrame,
     else:
         full_df = pd.concat([df, lower_df, upper_df], ignore_index=True)
         return full_df
+
+def compute_metrics(p) -> dict[str, float]:
+    seqeval = evaluate.load("seqeval")
+    predictions, labels = p
+    predictions = np.argmax(predictions, axis=2)
+
+    true_predictions = [
+        [label_list[p] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+    true_labels = [
+        [label_list[l] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+
+    results = seqeval.compute(predictions=true_predictions, references=true_labels)
+    return {
+        "precision": results["overall_precision"],
+        "recall": results["overall_recall"],
+        "f1": results["overall_f1"],
+        "accuracy": results["overall_accuracy"],
+    }

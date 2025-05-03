@@ -1,9 +1,7 @@
-from preprocessing_utils import get_reg_pandas_df, get_aug_pandas_df
+from preprocessing_utils import get_reg_pandas_df, get_aug_pandas_df, compute_metrics
 from datasets import Dataset, DatasetDict
 from transformers import AutoTokenizer, AutoModelForTokenClassification, TrainingArguments, DataCollatorForTokenClassification, Trainer
-import numpy as np
-import torch
-import evaluate
+
 
 #load train file
 zul_aug_train = get_aug_pandas_df("./data/zul/train.txt", test=False)
@@ -66,70 +64,22 @@ aug_model = AutoModelForTokenClassification.from_pretrained("xlm-roberta-base", 
 reg_model.to("cuda")
 aug_model.to("cuda")
 
-#also training_args
-reg_training_args = TrainingArguments(
-    output_dir="reg_zul",
-    learning_rate=2e-5,
-    per_device_train_batch_size=16,
-    per_device_eval_batch_size=16,
-    num_train_epochs=2,
-    weight_decay=0.01,
-    eval_strategy="epoch",
-    save_strategy="epoch",
-    load_best_model_at_end=True,
-    push_to_hub=False,
-    report_to = 'none',
-)
-
-aug_training_args = TrainingArguments(
-    output_dir="aug_zul",
-    learning_rate=2e-5,
-    per_device_train_batch_size=16,
-    per_device_eval_batch_size=16,
-    num_train_epochs=2,
-    weight_decay=0.01,
-    eval_strategy="epoch",
-    save_strategy="epoch",
-    load_best_model_at_end=True,
-    push_to_hub=False,
-    report_to = 'none',
-)
-
-#set up compute metrics
-def compute_metrics(p) -> dict[str, float]:
-    seqeval = evaluate.load("seqeval")
-    predictions, labels = p
-    predictions = np.argmax(predictions, axis=2)
-
-    true_predictions = [
-        [label_list[p] for (p, l) in zip(prediction, label) if l != -100]
-        for prediction, label in zip(predictions, labels)
-    ]
-    true_labels = [
-        [label_list[l] for (p, l) in zip(prediction, label) if l != -100]
-        for prediction, label in zip(predictions, labels)
-    ]
-
-    results = seqeval.compute(predictions=true_predictions, references=true_labels)
-    return {
-        "precision": results["overall_precision"],
-        "recall": results["overall_recall"],
-        "f1": results["overall_f1"],
-        "accuracy": results["overall_accuracy"],
-    }
-
 #making a data collator to convert to long
 data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
 
-#now we train
-reg_trainer = Trainer(reg_model, args = reg_training_args, train_dataset=zul_tokenized_reg_dataset["train"],
+training_args = TrainingArguments(output_dir="temp_output", overwrite_output_dir=True, learning_rate=1e-4,
+    per_device_train_batch_size=8, per_device_eval_batch_size=16, num_train_epochs=2, weight_decay=0,
+    eval_strategy="epoch", logging_strategy="epoch", save_strategy="no",
+    load_best_model_at_end=False, push_to_hub=False, report_to='none', disable_tqdm=True, seed=1)
+
+reg_trainer = Trainer(reg_model, args = training_args, train_dataset=zul_tokenized_reg_dataset["train"],
                       eval_dataset=zul_tokenized_reg_dataset["dev"], data_collator=data_collator, compute_metrics=compute_metrics)
 reg_trainer.train()
 print(f"Baseline F1 on Reg: {reg_trainer.evaluate(eval_dataset=zul_tokenized_test_dataset['reg'])['eval_f1'] * 100:0.2f}")
 print(f"Baseline F1 on Upper: {reg_trainer.evaluate(eval_dataset=zul_tokenized_test_dataset['upper'])['eval_f1'] * 100:0.2f}")
 print(f"Baseline F1 on Lower: {reg_trainer.evaluate(eval_dataset=zul_tokenized_test_dataset['lower'])['eval_f1'] * 100:0.2f}")
 
-aug_trainer = Trainer(aug_model, args= aug_training_args, train_dataset=zul_tokenized_aug_dataset["train"],
+aug_trainer = Trainer(aug_model, args= training_args, train_dataset=zul_tokenized_aug_dataset["train"],
                       eval_dataset=zul_tokenized_aug_dataset["dev"], data_collator=data_collator, compute_metrics=compute_metrics)
 aug_trainer.train()
 print(f"Augmented F1 on Reg: {aug_trainer.evaluate(eval_dataset=zul_tokenized_test_dataset['reg'])['eval_f1'] * 100:0.2f}")
