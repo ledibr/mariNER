@@ -68,8 +68,8 @@ aug_model.to("cuda")
 data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
 
 
-training_args = TrainingArguments(output_dir="temp_output", overwrite_output_dir=True, learning_rate=1e-6,
-    per_device_train_batch_size=32,per_device_eval_batch_size=16, num_train_epochs=3, weight_decay=0.05,
+training_args = TrainingArguments(output_dir="temp_output", overwrite_output_dir=True, learning_rate=5e-5,
+    per_device_train_batch_size=16,per_device_eval_batch_size=16, num_train_epochs=3, weight_decay=0.05,
     eval_strategy="epoch", logging_strategy="epoch", save_strategy="no", load_best_model_at_end=False,
     push_to_hub=False, report_to='none', disable_tqdm=True, seed=1)
 
