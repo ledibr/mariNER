@@ -1,8 +1,12 @@
-from typing import Any
+from typing import Any, NamedTuple
 import pandas as pd
 import evaluate
 import numpy as np
 
+BEGIN = "B"
+INSIDE = "I"
+OUTSIDE = "O"
+DELIM = "-"
 
 label_list = ["O", "B-PER", "I-PER", "O-PER", "B-ORG", "I-ORG", "O-ORG", "B-LOC", "I-LOC", "O-LOC"]
 
@@ -34,6 +38,21 @@ class Document:
                 and self.tokens == other.tokens
                 and self.labels == other.labels
         )
+
+
+class Mention(NamedTuple):
+    """An immutable mention with an entity type and start/end indices.
+
+    Like standard slicing operations, the start index is inclusive
+    and the end index is inclusive. For example, if the tokens of
+    a sentence are ["Brandeis", "University", "is", "awesome"],
+    an ORG mention for the first two tokens would have a start
+    index of 0 and an end index of 2. Note that the length of the
+    mention is simply end - start."""
+
+    entity_type: str
+    start: int
+    end: int
 
 
 def load_conll_file(path: str, delimiter: str = " ") -> list[Document]:
@@ -121,3 +140,41 @@ def compute_metrics(p) -> dict[str, float]:
         "f1": results["overall_f1"],
         "accuracy": results["overall_accuracy"],
     }
+
+
+def decode_bio(labels: list[str]) -> list[Mention]:
+    in_mention = False
+    start = 0
+    end = start
+    entity_type = ' '
+    mentions = []
+    count = 0
+
+    for label in labels:
+        label_parts = label.rsplit("-")
+        boundary = label_parts[0]
+        # If it's O, then label_parts will only have length 1, so use -1 indexing
+        curr_type = label_parts[-1]
+        # handles case if I starts without a B
+        if not in_mention and boundary != OUTSIDE:
+            entity_type = curr_type
+            start = count
+            in_mention = True
+        elif in_mention:
+            if not boundary == INSIDE or not curr_type == entity_type:
+                end = count
+                mentions.append(Mention(entity_type, start, end))
+
+                if boundary == OUTSIDE:
+                    in_mention = False
+                # Handles case of two mentions next to each other (B-LOC B-LOC)
+                # Handles invalid sequence (B-PER I-ORG)
+                else:
+                    start = count
+                    entity_type = curr_type
+        count += 1
+    # If final label is an entity
+    if in_mention:
+        mentions.append(Mention(entity_type, start, count))
+
+    return mentions
