@@ -1,5 +1,6 @@
 # uncap_ner
 
-![image](https://github.com/user-attachments/assets/0799ae8e-b553-499c-82ec-098d0aec634d)
+To see English results, run models.py in eng/models.
 
-Since I'm not sure if we're allowed to redistribute this data, I'm showing a screenshot of my directory structure. If you recreate it on your machine, it should work. File order isn't important since we use the relative paths, but if you don't want to mess with moving around files you could replace them with the absolute paths.
+To see multilingual results, run any of finnish.py, dutch.py, german.py, spanish.py, or zulu.py. To run on the/a cluster, you may have to modify the .sh files or write your own.
+
