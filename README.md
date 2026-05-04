@@ -1,6 +1,3 @@
-# uncap_ner
+# Multi-cased Augmentation for Robustness to Idiosyncrasies in Named Entity Recognition (mariNER)
 
-To see English results, run models.py in eng/models.
-
-To see multilingual results, run any of finnish.py, dutch.py, german.py, spanish.py, or zulu.py. To run on the/a cluster, you may have to modify the .sh files or write your own.
-
+Instructions for script usage will be added here once updated.
