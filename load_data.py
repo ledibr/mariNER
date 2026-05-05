@@ -1,4 +1,4 @@
-from datasets import load_dataset, concatenate_datasets, disable_progress_bars, ClassLabel
+from datasets import load_dataset, concatenate_datasets, disable_progress_bars
 
 
 class AugmentedDataLoader:
